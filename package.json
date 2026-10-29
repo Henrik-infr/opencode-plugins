@@ -6,7 +6,7 @@
   "author": "Erik Darling (https://erikdarling.com)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/erikdarlingdata/opencode-plugins.git"
+    "url": "git+https://github.com/Henrik-infr/opencode-plugins.git"
   },
   "type": "module",
   "main": "plugin.ts",
