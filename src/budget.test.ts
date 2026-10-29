@@ -1,5 +1,5 @@
 import { expect, test } from "vitest"
-import { applyMessage, budget, crossedLevel, elapsedPercent, paceOf, pruneEvents, windowStart, windowUsed } from "./budget"
+import { applyMessage, budget, crossedLevel, decayedWarned, elapsedPercent, paceOf, pruneEvents, windowStart, windowUsed } from "./budget"
 import type { Shared } from "./shared"
 import { mkdtemp, readFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -43,6 +43,23 @@ test("crossedLevel returns the highest threshold met", () => {
   expect(crossedLevel(97, [70, 85, 95])).toBe(95)
 })
 
+test("warned level decays when the window's level drops (a fresh climb re-toasts)", () => {
+  let warned: Record<string, number> = {}
+  const climb = (percent: number) => { // the decision measure() makes per window
+    const level = crossedLevel(percent, [70, 85, 95])
+    warned.five_hour = decayedWarned(warned, "five_hour", level)
+    if (level > warned.five_hour) {
+      warned.five_hour = level
+      return true // the toast fires
+    }
+    return false
+  }
+  expect(climb(75)).toBe(true)  // crossing 70 toasts
+  expect(climb(80)).toBe(false)  // still in the 70 band: no re-toast
+  expect(climb(50)).toBe(false)  // level drops to 0: no toast, and the stored level decays with it
+  expect(climb(75)).toBe(true)   // climbing past 70 again toasts again
+})
+
 test("paceOf flags spend ahead of the window's elapsed share", () => {
   const week = 7 * 24 * H
   const pace = paceOf(75, NOW - 0.6 * week, NOW, week, 10)!
@@ -81,6 +98,14 @@ test("pace over the margin refuses new subagent spawns", async () => {
   const run = await budget({} as any, { budget7d: 100 }, mkShared(dir))
   await run.event!(msg("m1", 90))  // first sighting of the process: baseline
   await run.event!(msg("m1", 130)) // +40 of the 7-day budget with ~0% of the window gone: 40 points ahead of pace
+  await expect(run["tool.execute.before"]!({ tool: "task" } as any, { args: {} } as any)).rejects.toThrow(/New subagents are refused until/)
+})
+
+test("spawnGatePercent 0 disables only the window gate, not the pace refusal", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "budget-"))
+  const run = await budget({} as any, { budget7d: 100, spawnGatePercent: 0 }, mkShared(dir))
+  await run.event!(msg("m1", 90))  // first sighting of the process: baseline
+  await run.event!(msg("m1", 130)) // +40 of the 7-day budget: 40 points ahead of pace, window far from the gate
   await expect(run["tool.execute.before"]!({ tool: "task" } as any, { args: {} } as any)).rejects.toThrow(/New subagents are refused until/)
 })
 

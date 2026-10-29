@@ -36,6 +36,12 @@ export function elapsedPercent(windowStartMs: number, now: number, windowMs: num
 export const crossedLevel = (percent: number, thresholds: number[]): number =>
   thresholds.filter(t => percent >= t).reduce((m, t) => Math.max(m, t), 0)
 
+// A stored warn level decays down with the window's level, so a fresh climb re-toasts (README: "once each per window").
+export function decayedWarned(warned: Record<string, number>, kind: string, level: number): number {
+  const stored = warned[kind] ?? 0
+  return level < stored ? level : stored
+}
+
 export function paceOf(usedPercent: number, windowStartMs: number, now: number, windowMs: number, margin: number) {
   const elapsed = elapsedPercent(windowStartMs, now, windowMs)
   const ahead = usedPercent - elapsed
@@ -106,7 +112,8 @@ export async function budget(input: PluginInput, options: Record<string, unknown
     for (const [key, w] of Object.entries({ five_hour: body.windows.fiveHour, seven_day: body.windows.sevenDay })) {
       if (w.budget <= 0) continue
       const level = crossedLevel(w.percent, thresholds)
-      if (level > (warned[key] ?? 0)) {
+      warned[key] = decayedWarned(warned, key, level)
+      if (level > warned[key]) {
         warned[key] = level
         await shared.toast(`Usage: the ${key === "five_hour" ? "5-hour" : "7-day"} token window is at ${Math.round(w.percent)}% of budget`, "warning")
       }
@@ -117,6 +124,8 @@ export async function budget(input: PluginInput, options: Record<string, unknown
         warned.seven_day_pace = level
         await shared.toast(`Usage: 7-day spend is ${Math.round(body.pace.ahead)} points ahead of pace; subagents refused until ${body.pace.until} if spend stays flat`, "warning")
       }
+    } else if (warned.seven_day_pace > 0) {
+      warned.seven_day_pace = 0 // pace lifted: the next pace episode warns again
     }
     await save(now)
   }
@@ -144,14 +153,16 @@ export async function budget(input: PluginInput, options: Record<string, unknown
       }
     },
     "tool.execute.before": async (i) => {
-      if (gate <= 0 || i.tool !== "task") return
+      if (i.tool !== "task") return
       const saved = JSON.parse(await readFile(file, "utf8").catch(() => "null")) as FileShape | null
       if (!saved) return
-      const over = Object.values(saved.windows).find(w => w.budget > 0 && w.percent >= gate)
-      if (over) {
-        throw new Error(
-          `usage-budget: the ${over === saved.windows.fiveHour ? "5-hour" : "7-day"} token window is at ${Math.round(over.percent)}% of budget, ` +
-          `at or past the ${gate}% limit for new subagents. Spawn none; finish the work in hand, write the handoff, and tell the user.`)
+      if (gate > 0) { // spawnGatePercent 0 turns off only the window gate; the pace gate is paceMargin's
+        const over = Object.values(saved.windows).find(w => w.budget > 0 && w.percent >= gate)
+        if (over) {
+          throw new Error(
+            `usage-budget: the ${over === saved.windows.fiveHour ? "5-hour" : "7-day"} token window is at ${Math.round(over.percent)}% of budget, ` +
+            `at or past the ${gate}% limit for new subagents. Spawn none; finish the work in hand, write the handoff, and tell the user.`)
+        }
       }
       if (saved.pace) {
         throw new Error(

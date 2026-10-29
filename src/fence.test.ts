@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest"
-import { fence, fenceConfig, pushProblem, sharedGitMutation } from "./fence"
+import { fence, fenceConfig, KILL_BY_NAME, pushProblem, sharedGitMutation } from "./fence"
 
 vi.mock("node:fs/promises", () => ({
   stat: async (p: unknown) =>
@@ -42,7 +42,13 @@ describe("shared checkout git mutations (ported)", () => {
 
 describe("command guards (ported)", () => {
   test("kill by name", () => {
-    expect(/taskkill \/IM node.exe/i.test("taskkill /IM node.exe")).toBe(true)
+    expect(KILL_BY_NAME.test("taskkill /IM node.exe")).toBe(true)
+    expect(KILL_BY_NAME.test("pkill firefox")).toBe(true)
+    expect(KILL_BY_NAME.test("killall python")).toBe(true)
+    expect(KILL_BY_NAME.test("Stop-Process -Name opencode")).toBe(true)
+    expect(KILL_BY_NAME.test("taskkill /PID 1234")).toBe(false)
+    expect(KILL_BY_NAME.test("Stop-Process -Id 42")).toBe(false)
+    expect(KILL_BY_NAME.test("git push")).toBe(false)
   })
 })
 

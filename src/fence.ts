@@ -90,7 +90,8 @@ export async function fence(input: PluginInput, options: Record<string, unknown>
         const args = output.args as Record<string, unknown>
         const command = i.tool === "bash" ? String(args.command ?? "") : ""
         const path = args.filePath ?? args.path
-        const sub = await isSubagent(input, shared, i.sessionID)
+        // Both subagent-scoped guards default off; skip the session lookup when neither is active.
+        const sub = cfg.sharedCheckout || cfg.readLimitBytes > 0 ? await isSubagent(input, shared, i.sessionID) : false
 
         if (cfg.bannedRoots.length) {
           const n = norm(path)
