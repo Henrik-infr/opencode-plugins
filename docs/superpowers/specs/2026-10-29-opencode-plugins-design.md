@@ -13,8 +13,8 @@ opencode's shape, or dropped with the reason recorded; nothing is silently
 dropped.
 
 Revised 2026-10-29 after external review: claims about opencode were checked
-against the published config schema, the plugin/SDK docs, and the 1.19.4 SDK
-types. plugin options are now spike 0, the skill installs through folders
+against the published config schema, the plugin/SDK docs, and the 1.18.35 SDK
+types (the installed opencode version). plugin options are now spike 0, the skill installs through folders
 opencode already reads, model-allowlist is dropped (no tier aliases exist in
 opencode), and budget counts usage by per-message deltas.
 
@@ -38,13 +38,14 @@ opencode), and budget counts usage by per-message deltas.
   `chat.params`, `experimental.chat.system.transform`,
   `experimental.chat.messages.transform`
 - **Custom tools**: `tool()` helper (Zod args)
-- **Commands**: markdown files; `bin/install.ts` copies them into
-  `~/.config/opencode/command/`, a folder opencode already reads
-- **TUI**: toasts via `client.tui.showToast({ message, variant })`; opencode
+- **Commands**: markdown files; the plugin copies them into
+  `~/.config/opencode/commands/` at startup, a folder opencode already reads
+- **TUI**: toasts via `client.tui.showToast({ body: { message, variant } })`
+  (plugins get the v1 client; the flat shape is v2); opencode
   has no status band
 - **Skills**: same `SKILL.md` format as Claude Code, discovered from
   `~/.config/opencode/skills/` among other folders
-- **Session model** (verified in the 1.19.4 SDK types): `Session.parentID`
+- **Session model** (verified in the 1.18.35 SDK types): `Session.parentID`
   exists, `session.children()` lists a session's subagents, and
   `AssistantMessage` carries `cost` and `tokens`
 
@@ -67,13 +68,13 @@ opencode-plugins/
     resume.ts           seat-resume
   skills/query-plan-analysis/   SKILL.md + scripts/extract.py + references (copied verbatim)
   commands/             asks.md, fleet.md, resume-sessions.md
-  bin/install.ts        copies skills/ and commands/ into ~/.config/opencode/
   scripts/resume-sessions.ps1   ported from seat-resume
   tests/
   docs/superpowers/specs/
 ```
 
-`@opencode-ai/plugin` is a dev dependency, used for types only.
+`@opencode-ai/plugin` is a dev dependency, used for types only, pinned to the
+opencode version actually run (1.18.35 today) so the types match the runtime.
 
 ## 5. Install UX
 
@@ -156,7 +157,7 @@ message style.
 
 ### 6.5 `budget` (from usage-budget)
 
-opencode emits no rate-limit events, so this is a configured token/USD budget
+opencode emits no rate-limit events, so this is a configured token budget
 rather than percent-of-plan:
 
 - Options: `budget5h` and `budget7d` (token amounts, one per window; `0`
@@ -197,10 +198,13 @@ rather than percent-of-plan:
 
 - `skills/query-plan-analysis/` copied verbatim (SKILL.md, `extract.py`,
   references) — the content is harness-agnostic.
-- Registration: `bin/install.ts` (run once after install) copies
+- Registration: at plugin startup, `plugin.ts` copies
   `skills/query-plan-analysis/` into `~/.config/opencode/skills/` and
-  `commands/*.md` into `~/.config/opencode/command/` — folders opencode
-  already reads. No runtime config mutation, no timing assumptions.
+  `commands/*.md` into `~/.config/opencode/commands/` — folders opencode
+  already reads — skipping files whose content already matches. Zero user
+  steps, and the copies follow package updates. Skills and commands may be
+  scanned before plugin init, so on a fresh install they appear from the
+  second launch; the README says so. No runtime config mutation.
 
 ### 6.8 Not ported
 
@@ -222,11 +226,12 @@ notes; spike code is discarded.
 | # | Question | Needed by | Fallback if it fails |
 | --- | --- | --- | --- |
 | 0 | Does the config `options` value reach the plugin function's second parameter on opencode 1.18.x? | every sub-plugin | options read from `~/.config/opencode/darling-data.json`, same shape |
-| 1 | Does `tool.execute.before` input carry the calling `sessionID`, and can the session be identified as a subagent (via `parentID`)? | fence, wall | guards apply to all sessions (fence already guards the main session) |
+| 1 | Given the `sessionID` from `tool.execute.before` (confirmed in types), does a session lookup at runtime return `parentID` for a `task`-spawned subagent? | fence, wall | guards apply to all sessions (fence already guards the main session) |
 
 Resolved during review against the SDK types and docs — no spike needed:
 sessions have `parentID` and `session.children()` lists subagents; toasts go
-through `client.tui.showToast`; assistant messages carry `cost` and `tokens`.
+through `client.tui.showToast({ body })`; `tool.execute.before` input is
+`{ tool, sessionID, callID }`; assistant messages carry `cost` and `tokens`.
 
 ## 8. Testing
 
