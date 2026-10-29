@@ -1,10 +1,12 @@
 import type { Plugin, Hooks } from "@opencode-ai/plugin"
 import { createShared, list, mergeHooks } from "./src/shared"
+import { fence } from "./src/fence"
 
 type SubPlugin = (input: any, options: Record<string, unknown>, shared: ReturnType<typeof createShared>["shared"]) => Promise<Partial<Hooks>>
 
 const SUBPLUGINS: Record<string, SubPlugin> = {
-  // fence: ..., wall: ..., asks: ..., fleet: ..., budget: ..., resume: ...   (added in Tasks 3-9)
+  fence,
+  // wall: ..., asks: ..., fleet: ..., budget: ..., resume: ...   (added in Tasks 4-9)
 }
 
 export default (async (input, options = {}) => {
