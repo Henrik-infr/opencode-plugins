@@ -148,6 +148,8 @@ check becomes a startup check plus a per-request check:
 opencode emits no rate-limit events, so this is a configured token/USD budget
 rather than percent-of-plan:
 
+- Options: `budget5h` and `budget7d` (token amounts, one per window; `0`
+  disables that window). The percent options below are percentages of these.
 - `message.updated` events accumulate token usage into persistent rolling 5h
   and 7d windows, written to `<config>/usage-budget/latest.json` using the
   same file contract as the Claude version (external readers keep working).
