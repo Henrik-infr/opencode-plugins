@@ -655,8 +655,7 @@ import path from "node:path"
 import { copyIfChanged } from "./install"
 
 async function dir(files: Record<string, string>): Promise<string> {
-  const root = await mkdir(path.join(tmpdir(), `install-${Math.random().toString(36).slice(2)}`), { recursive: true })
-    .then(() => path.join(tmpdir(), `install-${Math.random().toString(36).slice(2)}`))
+  const root = path.join(tmpdir(), `install-${Math.random().toString(36).slice(2)}`)
   for (const [name, body] of Object.entries(files)) {
     await mkdir(path.dirname(path.join(root, name)), { recursive: true })
     await writeFile(path.join(root, name), body)
