@@ -182,10 +182,11 @@ rather than percent-of-plan:
 
 ### 6.6 `resume` (from seat-resume)
 
-- `event` hook on `session.created` / `session.idle` / `session.deleted`:
-  opencode already stores its own sessions (id, directory, title, timestamps).
+- `event` hook on `session.created` / `session.deleted`: opencode
+  already stores its own sessions (id, directory, title, timestamps).
   The registry adds only what that storage lacks: an ended-cleanly marker per
-  session id, plus last activity. Check opencode's session storage layout
+  session id, plus last activity (a 60-second heartbeat while the session is
+  alive subsumes idle touches). Check opencode's session storage layout
   during implementation before adding anything else to the registry.
 - `/resume-sessions` command: lists sessions interrupted within the last 72
   hours, then the agent runs the bundled `scripts/resume-sessions.ps1`.
@@ -196,8 +197,9 @@ rather than percent-of-plan:
   marker as interrupted. `-Launch` reopens tabs running
   `opencode --session <id>` in the session's original directory, in WezTerm
   or Windows Terminal. Windows only, as today.
-- Options carried over: `registry_dir`, `sessions_dir`, `resume_script`,
-  `powershell`, `terminal`.
+- Options carried over: `registry_dir`, `resume_script`, `powershell`,
+  `terminal`. `sessions_dir` is dropped: opencode's session storage holds no
+  pid files, and the heartbeat replaced pid-based liveness.
 
 ### 6.7 `query-plan-analysis` (from sqlserver-query-plans)
 
