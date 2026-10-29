@@ -3,13 +3,15 @@ import { createShared, list, mergeHooks } from "./src/shared"
 import { installAssets } from "./src/install"
 import { fence } from "./src/fence"
 import { asks } from "./src/asks"
+import { fleet } from "./src/fleet"
 
 type SubPlugin = (input: any, options: Record<string, unknown>, shared: ReturnType<typeof createShared>["shared"]) => Promise<Partial<Hooks>>
 
 const SUBPLUGINS: Record<string, SubPlugin> = {
   fence,
   asks,
-  // wall: ..., fleet: ..., budget: ..., resume: ...   (added in Tasks 6-9)
+  fleet,
+  // wall: ..., budget: ..., resume: ...   (added in Tasks 7-9)
 }
 
 export default (async (input, options = {}) => {
