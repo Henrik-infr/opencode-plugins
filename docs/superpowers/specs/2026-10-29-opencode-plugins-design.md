@@ -8,8 +8,15 @@
 ## 1. Purpose
 
 Port the Darling Data Claude Code plugin collection to opencode as one
-npm-installable umbrella package. Every Claude plugin is ported or consciously
-reimagined in opencode's shape; nothing is silently dropped.
+npm-installable umbrella package. Every Claude plugin is ported, reimagined in
+opencode's shape, or dropped with the reason recorded; nothing is silently
+dropped.
+
+Revised 2026-10-29 after external review: claims about opencode were checked
+against the published config schema, the plugin/SDK docs, and the 1.19.4 SDK
+types. plugin options are now spike 0, the skill installs through folders
+opencode already reads, model-allowlist is dropped (no tier aliases exist in
+opencode), and budget counts usage by per-message deltas.
 
 ## 2. Decisions (fixed during brainstorming)
 
@@ -24,15 +31,22 @@ reimagined in opencode's shape; nothing is silently dropped.
 ## 3. opencode extension surface used
 
 - **Plugins**: TS modules loaded from npm (auto-installed by Bun at startup,
-  cached under `~/.cache/opencode/node_modules/`)
+  cached under `~/.cache/opencode/node_modules/`). The plugin signature is
+  `(input, options?)`; whether the config `options` value actually reaches
+  the second parameter on opencode 1.18.x is spike 0.
 - **Hooks**: `tool.execute.before` (throw = refuse), `event`, `config`,
   `chat.params`, `experimental.chat.system.transform`,
   `experimental.chat.messages.transform`
 - **Custom tools**: `tool()` helper (Zod args)
-- **Commands**: injected programmatically via the `config` hook into
-  `cfg.command`
-- **TUI**: toasts only (`tui.toast.show`); opencode has no status band
-- **Skills**: same `SKILL.md` format as Claude Code
+- **Commands**: markdown files; `bin/install.ts` copies them into
+  `~/.config/opencode/command/`, a folder opencode already reads
+- **TUI**: toasts via `client.tui.showToast({ message, variant })`; opencode
+  has no status band
+- **Skills**: same `SKILL.md` format as Claude Code, discovered from
+  `~/.config/opencode/skills/` among other folders
+- **Session model** (verified in the 1.19.4 SDK types): `Session.parentID`
+  exists, `session.children()` lists a session's subagents, and
+  `AssistantMessage` carries `cost` and `tokens`
 
 ## 4. Repo layout
 
@@ -41,18 +55,19 @@ source.
 
 ```
 opencode-plugins/
-  package.json          main: plugin.ts; files: src/, skills/, scripts/
+  package.json          main: plugin.ts; files: src/, skills/, commands/, scripts/
   plugin.ts             entry: composes sub-plugins, applies options
   src/
     shared.ts           option parsing, path normalization, registry helpers
     fence.ts            subagent-fence
     wall.ts             subagent-wall
-    allowlist.ts        model-allowlist
     asks.ts             open-asks
     fleet.ts            subagent-band
     budget.ts           usage-budget
     resume.ts           seat-resume
   skills/query-plan-analysis/   SKILL.md + scripts/extract.py + references (copied verbatim)
+  commands/             asks.md, fleet.md, resume-sessions.md
+  bin/install.ts        copies skills/ and commands/ into ~/.config/opencode/
   scripts/resume-sessions.ps1   ported from seat-resume
   tests/
   docs/superpowers/specs/
@@ -80,6 +95,11 @@ list turns a sub-plugin off entirely (the opt-out for the umbrella package):
 Each sub-plugin reads only its own namespace. Option parsing is lenient, as in
 the Claude plugins: list options accept arrays or comma/newline-separated
 strings; booleans fall back to their defaults on anything else.
+
+The `options` object reaching the plugin function is spike 0: the config
+schema documents it, but the runtime wiring on opencode 1.18.x is unverified.
+If it fails, options are read from `~/.config/opencode/darling-data.json`
+instead, same shape.
 
 ## 6. Sub-plugin designs
 
@@ -111,48 +131,44 @@ message style.
 - No-edit nudge at `noEditNudgeK` context tokens without an edited file,
   applied to `codeAgentTypes`.
 - The main session is never limited.
+- Reference while porting: the pi version (`pi-subagent-guardrails`' context
+  wall) is closer to opencode's model than the Claude hook version.
 
-### 6.3 `allowlist` (from model-allowlist)
-
-opencode's `task` tool takes an agent type, not a model, so the spawn-time
-check becomes a startup check plus a per-request check:
-
-- `config` hook: validate every `cfg.agent[*].model` against the alias rules at
-  startup; throw on a pinned id.
-- `chat.params` hook: apply the same rules to per-request model overrides.
-- The `rules` option (`agent pattern => model => brief pattern => message`)
-  carries over; a rule that does not parse is skipped.
-
-### 6.4 `asks` (from open-asks)
+### 6.3 `asks` (from open-asks)
 
 - Custom tools `ask_add(question, recommendation)`, `ask_resolve(id)`,
   `ask_list()`, via the `tool()` helper.
 - A persistent per-session registry file, so a resumed session keeps its asks.
-- `tui.toast.show` when an ask is added.
+- `client.tui.showToast` when an ask is added.
 - `/asks` command: the agent lists pending asks from the registry.
 - No band: the degradation is toast + command + persistence. Open asks are
   saved per session, as in the Claude version.
 
-### 6.5 `fleet` (from subagent-band)
+### 6.4 `fleet` (from subagent-band)
 
-- `/fleet` command: list every subagent session of the current session through
-  the SDK client — type, model, steps, context size, estimated cost, finished
+- `/fleet` command: list every child session of the current session via
+  `session.children()` — agent, model, steps, context size, cost, finished
   ones included.
 - `subagent_vitals` custom tool: a cheap vitals read so the model does not
   parse output files to check progress.
-- Cost estimates from message token-usage parts with the `priceTable` option
-  (same defaults as the Claude version). List-price estimates, not a bill.
+- Cost comes from the `cost` field opencode already puts on each assistant
+  message (priced from models.dev). No price table of our own.
 
-### 6.6 `budget` (from usage-budget)
+### 6.5 `budget` (from usage-budget)
 
 opencode emits no rate-limit events, so this is a configured token/USD budget
 rather than percent-of-plan:
 
 - Options: `budget5h` and `budget7d` (token amounts, one per window; `0`
   disables that window). The percent options below are percentages of these.
-- `message.updated` events accumulate token usage into persistent rolling 5h
-  and 7d windows, written to `<config>/usage-budget/latest.json` using the
-  same file contract as the Claude version (external readers keep working).
+- `message.updated` events accumulate usage into persistent rolling 5h and 7d
+  windows, written to `~/.config/opencode/darling-data/budget.json`. The
+  numbers are a configured budget, not a plan's rate limit, so this is a new
+  file rather than the Claude version's contract. Schema per window:
+  `{ budget, used, percent, windowStart }`.
+- `message.updated` fires repeatedly while a message streams, and the
+  message's `cost` and `tokens` are running totals: usage is tracked per
+  message id and accumulated as deltas, so nothing is counted twice.
 - `warnPercents` raise toasts, once each per window.
 - Past `tellModelAtPercent`, inject a model-facing note via
   `experimental.chat.system.transform`.
@@ -162,11 +178,13 @@ rather than percent-of-plan:
   of the elapsed share of the window raises a toast and the gate, with the UTC
   time the refusal lifts if spend stays flat.
 
-### 6.7 `resume` (from seat-resume)
+### 6.6 `resume` (from seat-resume)
 
 - `event` hook on `session.created` / `session.idle` / `session.deleted`:
-  write one small registry file per interactive session (id, directory, title,
-  permission mode, last activity, ended-cleanly marker).
+  opencode already stores its own sessions (id, directory, title, timestamps).
+  The registry adds only what that storage lacks: an ended-cleanly marker per
+  session id, plus last activity. Check opencode's session storage layout
+  during implementation before adding anything else to the registry.
 - `/resume-sessions` command: lists sessions interrupted within the last 72
   hours, then the agent runs the bundled `scripts/resume-sessions.ps1`.
 - The script is ported: Windows process start-time comparison to tell a live
@@ -175,22 +193,25 @@ rather than percent-of-plan:
 - Options carried over: `registry_dir`, `sessions_dir`, `resume_script`,
   `powershell`, `terminal`.
 
-### 6.8 `query-plan-analysis` (from sqlserver-query-plans)
+### 6.7 `query-plan-analysis` (from sqlserver-query-plans)
 
 - `skills/query-plan-analysis/` copied verbatim (SKILL.md, `extract.py`,
   references) — the content is harness-agnostic.
-- Registration: the `config` hook appends the package's bundled `skills/`
-  directory to `cfg.skills.paths`.
-- If skills are scanned before plugin init (spike 1 fails), the fallback is
-  whichever of these needs zero user steps, decided at spike time: a README
-  line adding the package's `skills/` path (inside the opencode cache) via
-  `skills.paths`, or a postinstall copy into `~/.config/opencode/skills/`.
+- Registration: `bin/install.ts` (run once after install) copies
+  `skills/query-plan-analysis/` into `~/.config/opencode/skills/` and
+  `commands/*.md` into `~/.config/opencode/command/` — folders opencode
+  already reads. No runtime config mutation, no timing assumptions.
 
-### 6.9 Not ported
+### 6.8 Not ported
 
-`pi-session-resume`, `pi-subagent-watchdog`, `pi-subagent-guardrails` are
-pi-only. The README maps each to its opencode equivalent in this package
-(`resume`, `fleet`/`budget`, `wall`).
+- **model-allowlist**: opencode has no tier aliases — every model is a pinned
+  `provider/model` id, so the plugin's core rule (refuse pins, ask for the
+  alias) has nothing to check. Throwing from the `config` hook would crash
+  opencode at startup, and throwing from `chat.params` would break the main
+  chat. opencode itself errors on an unknown model id.
+- `pi-session-resume`, `pi-subagent-watchdog`, `pi-subagent-guardrails` are
+  pi-only. The README maps each to its opencode equivalent in this package
+  (`resume`, `fleet`/`budget`, `wall`).
 
 ## 7. Spikes (run before any port work)
 
@@ -200,19 +221,19 @@ notes; spike code is discarded.
 
 | # | Question | Needed by | Fallback if it fails |
 | --- | --- | --- | --- |
-| 1 | Does a `config`-hook append to `cfg.skills.paths` register skills? | 6.8 | documented `skills.paths` entry or postinstall copy |
-| 2 | Does `tool.execute.before` input identify the calling session/agent (subagent vs main)? | fence, wall | guards apply to all sessions (fence already guards the main session) |
-| 3 | Do session events expose parent/child relationships? | wall, fleet | wall degrades to time-since-session-created; fleet lists all sessions in the project |
-| 4 | What is the `tui.toast.show` shape from a plugin? | asks, budget | `client.app.log` only; README notes toasts unavailable |
+| 0 | Does the config `options` value reach the plugin function's second parameter on opencode 1.18.x? | every sub-plugin | options read from `~/.config/opencode/darling-data.json`, same shape |
+| 1 | Does `tool.execute.before` input carry the calling `sessionID`, and can the session be identified as a subagent (via `parentID`)? | fence, wall | guards apply to all sessions (fence already guards the main session) |
+
+Resolved during review against the SDK types and docs — no spike needed:
+sessions have `parentID` and `session.children()` lists subagents; toasts go
+through `client.tui.showToast`; assistant messages carry `cost` and `tokens`.
 
 ## 8. Testing
 
 - Unit tests per module for the pure logic: push parsing and regexes (fence),
-  option parsing (shared), budget window math, registry read/write. The test
-  setup mirrors claude-plugins (vitest).
+  option parsing (shared), budget window and delta math, registry read/write.
+  The test setup mirrors claude-plugins (vitest).
 - Each spike doubles as a manual integration check on Windows.
-- One runnable self-check per non-trivial module, same standard as
-  claude-plugins.
 
 ## 9. Deliberately out of scope
 
