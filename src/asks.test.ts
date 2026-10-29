@@ -20,7 +20,7 @@ describe("ask registry", () => {
   })
   test("a corrupt file yields an empty list, never a throw", async () => {
     const d = await dir()
-    await writeFile(path.join(d, "s1.json"), "{not json")
-    expect(await listAsks(path.join(d))).toEqual([])
+    await writeFile(path.join(d, "asks.json"), "{not json")
+    expect(await listAsks(d)).toEqual([])
   })
 })
