@@ -45,8 +45,11 @@ export async function resume(input: PluginInput, options: Record<string, unknown
 
   return {
     event: async ({ event }) => {
-      if (event.type === "session.created" && !event.properties.info.parentID) {
-        await save(await current(event.properties.info))
+      // session.updated also registers: continued sessions (-c/--session) never emit session.created
+      const info = (event.properties as any)?.info
+      if ((event.type === "session.created" || event.type === "session.updated") && info && !info.parentID
+        && (!entry || entry.sessionId !== info.id)) {
+        await save(await current(info))
         clearInterval(heartbeat) // one heartbeat per main session in this process
         heartbeat = setInterval(() => {
           if (entry) save({ ...entry, lastActive: new Date().toISOString() }).catch(() => undefined)

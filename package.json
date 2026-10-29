@@ -13,6 +13,7 @@
   "files": [
     "plugin.ts",
     "src/",
+    "!src/*.test.ts",
     "skills/",
     "commands/",
     "scripts/"

@@ -86,7 +86,9 @@ export function createShared(input: PluginInput): { shared: Shared; hooks: Parti
     shared,
     hooks: {
       event: async ({ event }) => {
-        if (event.type === "session.created" && !event.properties.info.parentID) main = event.properties.info.id
+        // session.updated matters for continued sessions (-c/--session): they never emit session.created
+        const info = (event.properties as any)?.info
+        if ((event.type === "session.created" || event.type === "session.updated") && info && !info.parentID) main = info.id
       },
     },
   }

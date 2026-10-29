@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { flag, list, mergeHooks, norm, num, slashes } from "./shared"
+import { createShared, flag, list, mergeHooks, norm, num, slashes } from "./shared"
 
 describe("lenient option parsing", () => {
   test("list takes arrays or comma/newline strings", () => {
@@ -50,5 +50,23 @@ describe("mergeHooks", () => {
     ] as any)
     await expect((merged["tool.execute.before"] as any)({ tool: "bash", sessionID: "s", callID: "c" }, { args: {} }))
       .rejects.toThrow("fence says no")
+  })
+})
+
+describe("session tracker (createShared)", () => {
+  const fire = (hooks: any, type: string, info: any) =>
+    hooks.event({ event: { type, properties: type.startsWith("session.") ? { info } : { sessionID: info.id } } })
+  test("session.created and session.updated set the main session (continuations emit no session.created)", async () => {
+    const { shared, hooks } = createShared({} as any)
+    await fire(hooks, "session.created", { id: "ses_a" })
+    expect(shared.currentSession()).toBe("ses_a")
+    await fire(hooks, "session.updated", { id: "ses_b" })
+    expect(shared.currentSession()).toBe("ses_b")
+  })
+  test("subagent sessions (parentID) never become the main session", async () => {
+    const { shared, hooks } = createShared({} as any)
+    await fire(hooks, "session.created", { id: "ses_main" })
+    await fire(hooks, "session.updated", { id: "ses_child", parentID: "ses_main" })
+    expect(shared.currentSession()).toBe("ses_main")
   })
 })
