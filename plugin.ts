@@ -1,5 +1,6 @@
 import type { Plugin, Hooks } from "@opencode-ai/plugin"
 import { createShared, list, mergeHooks } from "./src/shared"
+import { installAssets } from "./src/install"
 import { fence } from "./src/fence"
 
 type SubPlugin = (input: any, options: Record<string, unknown>, shared: ReturnType<typeof createShared>["shared"]) => Promise<Partial<Hooks>>
@@ -10,6 +11,7 @@ const SUBPLUGINS: Record<string, SubPlugin> = {
 }
 
 export default (async (input, options = {}) => {
+  await installAssets().catch(() => undefined)
   const disabled = new Set(list((options as any).disabled))
   const { shared, hooks } = createShared(input)
   const parts: Array<Partial<Hooks>> = [hooks] // tracker first: currentSession is set before sub-plugins see events
