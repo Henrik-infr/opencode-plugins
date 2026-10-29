@@ -43,7 +43,7 @@ if ($found.Count -eq 0) {
     return
 }
 
-$found = $found | Sort-Object Last -Descending
+$found = @($found | Sort-Object Last -Descending)
 $opencode = (Get-Command opencode -ErrorAction SilentlyContinue).Source
 if (-not $opencode) { $opencode = 'opencode' }
 
