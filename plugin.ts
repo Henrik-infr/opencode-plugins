@@ -4,6 +4,7 @@ import { installAssets } from "./src/install"
 import { fence } from "./src/fence"
 import { asks } from "./src/asks"
 import { fleet } from "./src/fleet"
+import { budget } from "./src/budget"
 
 type SubPlugin = (input: any, options: Record<string, unknown>, shared: ReturnType<typeof createShared>["shared"]) => Promise<Partial<Hooks>>
 
@@ -11,7 +12,8 @@ const SUBPLUGINS: Record<string, SubPlugin> = {
   fence,
   asks,
   fleet,
-  // wall: ..., budget: ..., resume: ...   (added in Tasks 7-9)
+  budget,
+  // wall: ..., resume: ...   (added in Tasks 8-9)
 }
 
 export default (async (input, options = {}) => {
