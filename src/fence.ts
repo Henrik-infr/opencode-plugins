@@ -1,6 +1,6 @@
 import type { Hooks, PluginInput } from "@opencode-ai/plugin"
 import { stat as statNode } from "node:fs/promises"
-import { flag, list, norm, num, slashes } from "./shared"
+import { flag, isSubagent, list, norm, num, slashes } from "./shared"
 
 const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 const normCommand = (c: string) => slashes(c).replace(/(^|[^a-z0-9])\/([a-z])\//gi, "$1$2:/").toLowerCase()
@@ -75,17 +75,6 @@ export async function sharedGitMutation(stat: Stat, command: string, cfg: FenceC
 }
 
 const deny = (why: string) => { throw new Error(`subagent-fence: ${why}`) }
-
-// Subagent check per the Task 1 spike findings: either client.session.get + parentID,
-// or "every session except shared.currentSession()".
-async function isSubagent(input: PluginInput, shared: { currentSession(): string | undefined }, sessionID: string): Promise<boolean> {
-  try {
-    const s = await input.client.session.get({ path: { id: sessionID } })
-    return Boolean((s.data as any)?.parentID)
-  } catch {
-    return false // the fence failing never blocks the call
-  }
-}
 
 export async function fence(input: PluginInput, options: Record<string, unknown>, shared: any): Promise<Partial<Hooks>> {
   const cfg = fenceConfig(options)

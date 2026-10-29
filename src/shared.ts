@@ -26,6 +26,17 @@ export type Shared = {
   toast(message: string, variant?: "info" | "success" | "warning" | "error"): Promise<void>
 }
 
+// Subagent check per the Task 1 spike findings: client.session.get + parentID, fail-open
+// (a guard failing never blocks the call). The main session has no parentID.
+export async function isSubagent(input: PluginInput, shared: Shared, sessionID: string): Promise<boolean> {
+  try {
+    const s = await input.client.session.get({ path: { id: sessionID } })
+    return Boolean((s.data as any)?.parentID)
+  } catch {
+    return false
+  }
+}
+
 const FUNCTION_KEYS: Array<keyof Hooks> = [
   "dispose", "event", "config", "chat.message", "chat.params", "chat.headers",
   "permission.ask", "command.execute.before", "tool.execute.before", "tool.execute.after",
