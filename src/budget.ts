@@ -44,11 +44,16 @@ export function paceOf(usedPercent: number, windowStartMs: number, now: number, 
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000, FIVE_H_MS = 5 * 60 * 60 * 1000
 
+// Persisted events are pruned past the 7-day window so the file does not grow unboundedly.
+export const pruneEvents = (events: UsageEvent[], now: number): UsageEvent[] =>
+  events.filter(e => now - e.t < WEEK_MS)
+
 type FileShape = {
   at: string
   windows: { fiveHour: Window; sevenDay: Window }
   pace: { used: number; elapsed: number; ahead: number; until: string } | null
   warned: Record<string, number>
+  events: UsageEvent[]
 }
 type Window = { budget: number; used: number; percent: number; windowStart: number }
 
@@ -77,6 +82,7 @@ export async function budget(input: PluginInput, options: Record<string, unknown
   async function save(now: number) {
     const body: FileShape = {
       at: new Date(now).toISOString(),
+      events: pruneEvents(state.events, now),
       windows: {
         fiveHour: { budget: budget5h, used: windowUsed(state.events, now, FIVE_H_MS), percent: 0, windowStart: windowStart(state.events, now, FIVE_H_MS) },
         sevenDay: { budget: budget7d, used: windowUsed(state.events, now, WEEK_MS), percent: 0, windowStart: windowStart(state.events, now, WEEK_MS) },
