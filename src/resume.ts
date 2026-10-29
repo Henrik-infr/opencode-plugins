@@ -12,17 +12,32 @@ export function interrupted(entries: Entry[], now: number, maxAgeHours = 72, sta
     Date.parse(e.lastActive) >= now - maxAgeHours * 3600_000)
 }
 
+export function resolveWhere(options: Record<string, unknown>, defaults: { registry: string; script: string }): {
+  registry: string; script: string; powershell: string; terminal: string
+} {
+  const text = (v: unknown, fallback: string) => (typeof v === "string" && v.trim() ? v.trim() : fallback)
+  return {
+    registry: text(options.registry_dir, defaults.registry),
+    script: text(options.resume_script, defaults.script),
+    powershell: text(options.powershell, "pwsh"),
+    terminal: text(options.terminal, "wezterm"),
+  }
+}
+
 export async function resume(input: PluginInput, options: Record<string, unknown>, shared: Shared): Promise<Partial<Hooks>> {
-  const registry = await shared.dataDir("sessions-registry")
+  const where = resolveWhere(options, {
+    registry: await shared.dataDir("sessions-registry"),
+    script: path.resolve(import.meta.dirname, "../scripts/resume-sessions.ps1"),
+  })
   let heartbeat: ReturnType<typeof setInterval> | undefined
   let entry: Entry | null = null
 
   const save = async (next: Entry) => {
     entry = next
-    await writeFile(path.join(registry, `${next.sessionId}.json`), `${JSON.stringify(next, null, 2)}\n`).catch(() => undefined)
+    await writeFile(path.join(where.registry, `${next.sessionId}.json`), `${JSON.stringify(next, null, 2)}\n`).catch(() => undefined)
   }
   const current = async (info: { id: string; directory: string; title?: string }): Promise<Entry> => {
-    const saved = await readFile(path.join(registry, `${info.id}.json`), "utf8")
+    const saved = await readFile(path.join(where.registry, `${info.id}.json`), "utf8")
       .then(b => JSON.parse(b) as Entry).catch(() => null)
     const now = new Date().toISOString()
     return { sessionId: info.id, directory: info.directory, title: saved?.title ?? info.title ?? "", startedAt: saved?.startedAt ?? now, lastActive: now, ended: "" }
@@ -46,14 +61,12 @@ export async function resume(input: PluginInput, options: Record<string, unknown
         description: "List the interactive opencode sessions that died or were interrupted in the last 72 hours, with the command that reopens each. Add -Launch to reopen them all as terminal tabs.",
         args: { launch: tool.schema.boolean().optional() },
         async execute(args) {
-          const ps = String(options.powershell ?? "pwsh")
-          const script = path.resolve(import.meta.dirname, "../scripts/resume-sessions.ps1")
-          const argv = [ps, "-NoProfile", "-File", script, "-Registry", registry]
+          const argv = [where.powershell, "-NoProfile", "-File", where.script, "-Registry", where.registry]
           if (args.launch) argv.push("-Launch")
-          if (options.terminal && options.terminal !== "wezterm") argv.push("-Terminal", String(options.terminal))
+          if (where.terminal !== "wezterm") argv.push("-Terminal", where.terminal)
           const { execFileSync } = await import("node:child_process")
           try {
-            const out = execFileSync(argv[0], argv.slice(1), { cwd: registry, encoding: "utf8", timeout: 30_000, windowsHide: true })
+            const out = execFileSync(argv[0], argv.slice(1), { cwd: where.registry, encoding: "utf8", timeout: 30_000, windowsHide: true })
             return out.trim() || "The resume script printed nothing."
           } catch (e: any) {
             return `${String(e.stdout ?? "")}${String(e.stderr ?? "")}`.trim() || `The resume script failed: ${e.message}`

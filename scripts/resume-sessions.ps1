@@ -81,11 +81,11 @@ foreach ($one in $found) {
         if ($env:WEZTERM_PANE) {
             & $wez cli spawn --cwd $e.directory -- @cmd | Out-Null
         } else {
-            Start-Process -FilePath $wez -ArgumentList (@('start', '--') + $cmd) -WorkingDirectory $e.directory
+            Start-Process -FilePath $wez -ArgumentList (@('start', '--cwd', $e.directory, '--') + $cmd)
         }
     } else {
         # -w 0 opens a tab in the newest Windows Terminal window; Start-Process quotes each argument for us.
-        Start-Process -FilePath $wt -ArgumentList (@('-w', '0', 'new-tab', '--') + $cmd) -WorkingDirectory $e.directory
+        Start-Process -FilePath $wt -ArgumentList (@('-w', '0', 'new-tab', '-d', $e.directory, '--') + $cmd)
     }
     'Reopened {0} in {1}' -f $(if ($e.title) { $e.title } else { $e.sessionId }), $e.directory
 }
