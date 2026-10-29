@@ -1,11 +1,20 @@
 import { expect, test } from "vitest"
-import { applyMessage, budget, crossedLevel, elapsedPercent, paceOf, pruneEvents, windowUsed } from "./budget"
+import { applyMessage, budget, crossedLevel, elapsedPercent, paceOf, pruneEvents, windowStart, windowUsed } from "./budget"
 import type { Shared } from "./shared"
 import { mkdtemp, readFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 
 const H = 3600_000, NOW = Date.parse("2026-10-29T12:00:00Z")
+
+const msg = (id: string, tokens: number) => ({
+  event: { type: "message.updated", properties: { info: { id, role: "assistant", tokens: { input: tokens, output: 0, reasoning: 0, cache: { read: 0, write: 0 } } } } },
+}) as any
+const mkShared = (dir: string): Shared => ({
+  currentSession: () => undefined,
+  dataDir: async () => dir,
+  toast: async () => {},
+})
 
 test("streaming message updates count once (delta accumulation)", () => {
   let state = { last: {} as Record<string, number>, events: [] as Array<{ t: number; d: number }> }
@@ -50,10 +59,7 @@ test("pruneEvents drops events older than 7 days and keeps newer", () => {
 
 test("budget windows persist events across restarts", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "budget-"))
-  const shared: Shared = { currentSession: () => undefined, dataDir: async () => dir, toast: async () => {} }
-  const msg = (id: string, tokens: number) => ({
-    event: { type: "message.updated", properties: { info: { id, role: "assistant", tokens: { input: tokens, output: 0, reasoning: 0, cache: { read: 0, write: 0 } } } } },
-  }) as any
+  const shared = mkShared(dir)
   const sum = (saved: any) => saved.events.reduce((s: number, e: any) => s + e.d, 0)
 
   const run1 = await budget({} as any, { budget5h: 1000, budget7d: 10000 }, shared)
@@ -68,4 +74,18 @@ test("budget windows persist events across restarts", async () => {
   const after2 = JSON.parse(await readFile(path.join(dir, "budget.json"), "utf8"))
   expect(sum(after2)).toBe(190)
   expect(after2.windows.fiveHour.used).toBe(190)
+})
+
+test("pace over the margin refuses new subagent spawns", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "budget-"))
+  const run = await budget({} as any, { budget7d: 100 }, mkShared(dir))
+  await run.event!(msg("m1", 90))  // first sighting of the process: baseline
+  await run.event!(msg("m1", 130)) // +40 of the 7-day budget with ~0% of the window gone: 40 points ahead of pace
+  await expect(run["tool.execute.before"]!({ tool: "task" } as any, { args: {} } as any)).rejects.toThrow(/New subagents are refused until/)
+})
+
+test("windowStart is the oldest in-window event, now when empty", () => {
+  const events = [{ t: NOW - H, d: 50 }, { t: NOW - 2 * H, d: 10 }, { t: NOW - 6 * H, d: 1 }]
+  expect(windowStart(events, NOW, 5 * H)).toBe(NOW - 2 * H)
+  expect(windowStart([], NOW, 5 * H)).toBe(NOW)
 })

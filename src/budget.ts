@@ -23,8 +23,11 @@ export function applyMessage(state: BudgetState, messageID: string, tokens: numb
 export const windowUsed = (events: UsageEvent[], now: number, windowMs: number): number =>
   events.filter(e => now - e.t < windowMs).reduce((s, e) => s + e.d, 0)
 
+// The window "starts" at the oldest in-window usage event (usage-based anchor for the pace check);
+// `now` when the window is empty. (Seeding with the floor `now - windowMs` would anchor every
+// window 7 days back and make the elapsed share a constant 100%, so pace could never fire.)
 export const windowStart = (events: UsageEvent[], now: number, windowMs: number): number =>
-  events.filter(e => now - e.t < windowMs).reduce((min, e) => Math.min(min, e.t), now - windowMs)
+  events.filter(e => now - e.t < windowMs).reduce((min, e) => Math.min(min, e.t), now)
 
 export function elapsedPercent(windowStartMs: number, now: number, windowMs: number): number {
   return Math.min(100, Math.max(0, (100 * (now - windowStartMs)) / windowMs))
@@ -149,6 +152,12 @@ export async function budget(input: PluginInput, options: Record<string, unknown
         throw new Error(
           `usage-budget: the ${over === saved.windows.fiveHour ? "5-hour" : "7-day"} token window is at ${Math.round(over.percent)}% of budget, ` +
           `at or past the ${gate}% limit for new subagents. Spawn none; finish the work in hand, write the handoff, and tell the user.`)
+      }
+      if (saved.pace) {
+        throw new Error(
+          `usage-budget: 7-day spend is ${Math.round(saved.pace.ahead)} points ahead of the share of the window passed (limit ${paceMargin}). ` +
+          `New subagents are refused until ${saved.pace.until} (UTC) if spend stays flat. Spawn none; finish the work in hand, write the handoff, and tell the user. ` +
+          "Waiting until then lifts it, and so does setting this plugin's paceMargin option to 0.")
       }
     },
   }

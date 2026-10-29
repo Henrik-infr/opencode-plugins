@@ -142,7 +142,8 @@ It also checks pace. When the 7-day spend runs `paceMargin` or more points
 ahead of the share of the window that has passed (70% of budget spent with
 60% of the window gone), you get a toast with the usage, the elapsed share
 and the UTC time it lifts if spend stays flat, again each time the gap grows
-by another margin. Without a 7-day budget set, the pace check is skipped.
+by another margin — and new subagent spawns are refused until that lift
+time. Without a 7-day budget set, the pace check is skipped.
 
 | Option | Default | What it does |
 | :- | :- | :- |
