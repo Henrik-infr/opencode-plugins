@@ -1586,8 +1586,10 @@ Do NOT run `npm publish` — that is the user's decision.
 
 (Record Task 1 results here before deleting the spike files)
 
-- Spike 0 (options reach the plugin): _pending_
-- Spike 1 (subagent identity via parentID): _pending_
+- Spike 0 (options reach the plugin): **YES** — `init` logged `optionsReceived` exactly `{"spike":42}` (verified on opencode 1.18.35, config `"plugin": [["./spike.ts", { "spike": 42 }]]`, once per `opencode run` process). Every sub-plugin reads options from the plugin's second parameter; spec §5 stands as written — no `darling-data.json` options file needed.
+- Spike 1 (subagent identity via parentID): **YES** — the `task`-spawned session logged `session.created` with `parentID` set to the main session's id, and every `tool` line inside it (`read`, `glob`) returned non-null `parentID` from `client.session.get({ path: { id } })`; the main session's own tool calls (`bash`, `task`) returned `parentID: null`. `shared.isSubagent(client, sessionID)` (Task 2) uses `client.session.get` + `parentID`; spec §7 row 1 stands as written.
+
+Side observation: loading a local plugin makes opencode generate `.opencode/package.json` (a `@opencode-ai/plugin` dep) plus `node_modules/` inside the project's `.opencode/` dir. Harmless (gitignored), but any packaged plugin must keep working when that folder is regenerated.
 
 ## Self-Review Notes
 
