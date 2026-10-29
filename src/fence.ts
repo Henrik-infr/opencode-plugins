@@ -18,7 +18,7 @@ export type FenceConfig = {
 
 export function fenceConfig(options: Record<string, unknown>): FenceConfig {
   const bannedRoots = list(options.banned_paths).map(norm).filter(Boolean)
-  const branches = list(options.protected_branches).map(escapeRegex)
+  const branches = list(options.protected_branches ?? ["main", "master", "dev"]).map(escapeRegex)
   const limit = num(options.read_limit_bytes, 0)
   return {
     forcePush: flag(options.guard_force_push, true),

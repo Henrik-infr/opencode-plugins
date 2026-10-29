@@ -51,3 +51,10 @@ test("banned paths normalize and build command regexes", () => {
   expect(cfg.bannedRoots).toEqual(["c:/secrets"])
   expect(cfg.bannedInCommand.length).toBe(1)
 })
+
+test("protected branches default to main, master, dev", () => {
+  const cfg = fenceConfig({})
+  expect(cfg.protectedBranch?.test("main")).toBe(true)
+  const off = fenceConfig({ protected_branches: [] })
+  expect(off.protectedBranch).toBeUndefined()
+})
