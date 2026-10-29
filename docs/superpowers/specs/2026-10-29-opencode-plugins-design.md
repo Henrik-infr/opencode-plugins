@@ -126,7 +126,8 @@ message style.
 
 - Track subagent session start times from `session.created` events.
 - After `warnMinutes`: inject a finish-up instruction into the subagent via
-  `experimental.chat.messages.transform`.
+  `experimental.chat.system.transform` (the messages.transform hook's input
+  carries no sessionID, so system.transform is the workable channel).
 - After `limitMinutes`: `tool.execute.before` restricts the session to `git`,
   `gh`, and `.md`/`.txt` writes; it commits, reports, and ends.
 - No-edit nudge at `noEditNudgeK` context tokens without an edited file. It
