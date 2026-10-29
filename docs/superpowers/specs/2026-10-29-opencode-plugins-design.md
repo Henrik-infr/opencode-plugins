@@ -129,8 +129,9 @@ message style.
   `experimental.chat.messages.transform`.
 - After `limitMinutes`: `tool.execute.before` restricts the session to `git`,
   `gh`, and `.md`/`.txt` writes; it commits, reports, and ends.
-- No-edit nudge at `noEditNudgeK` context tokens without an edited file,
-  applied to `codeAgentTypes`.
+- No-edit nudge at `noEditNudgeK` context tokens without an edited file. It
+  applies to every tracked subagent: opencode sessions do not expose the
+  agent type, so the `codeAgentTypes` option does not carry over.
 - The main session is never limited.
 - Reference while porting: the pi version (`pi-subagent-guardrails`' context
   wall) is closer to opencode's model than the Claude hook version.
@@ -188,9 +189,13 @@ rather than percent-of-plan:
   during implementation before adding anything else to the registry.
 - `/resume-sessions` command: lists sessions interrupted within the last 72
   hours, then the agent runs the bundled `scripts/resume-sessions.ps1`.
-- The script is ported: Windows process start-time comparison to tell a live
-  session from a reused process id, `-Launch` reopens tabs in WezTerm or
-  Windows Terminal. Windows only, as today.
+- The script is ported with one change: opencode's session storage has no pid
+  files, so liveness is a heartbeat — the plugin touches the registry entry
+  at least once a minute while its session is alive (an interval the
+  `dispose` hook clears), and the script treats a stale entry with no ended
+  marker as interrupted. `-Launch` reopens tabs running
+  `opencode --session <id>` in the session's original directory, in WezTerm
+  or Windows Terminal. Windows only, as today.
 - Options carried over: `registry_dir`, `sessions_dir`, `resume_script`,
   `powershell`, `terminal`.
 
