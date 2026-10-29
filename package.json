@@ -1,0 +1,38 @@
+{
+  "name": "opencode-darling-data",
+  "version": "0.1.0",
+  "description": "Darling Data plugins for opencode: subagent fence, wall, open asks, fleet, usage budget, session resume, and the SQL Server query-plan skill",
+  "license": "MIT",
+  "author": "Erik Darling (https://erikdarling.com)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/erikdarlingdata/opencode-plugins.git"
+  },
+  "type": "module",
+  "main": "plugin.ts",
+  "files": [
+    "plugin.ts",
+    "src/",
+    "skills/",
+    "commands/",
+    "scripts/"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "1.18.35",
+    "@types/node": "^26.6.6",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  },
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "subagents",
+    "guardrails",
+    "sql-server",
+    "query-plan"
+  ]
+}
