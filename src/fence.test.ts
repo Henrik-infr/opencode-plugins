@@ -1,5 +1,10 @@
-import { describe, expect, test } from "vitest"
-import { fenceConfig, pushProblem, sharedGitMutation } from "./fence"
+import { describe, expect, test, vi } from "vitest"
+import { fence, fenceConfig, pushProblem, sharedGitMutation } from "./fence"
+
+vi.mock("node:fs/promises", () => ({
+  stat: async (p: unknown) =>
+    String(p).endsWith("plain/.git") ? { isFile: () => false, isDirectory: () => true } : undefined,
+}))
 
 const base = { forcePush: true, protectedPush: true, protectedBranch: /(^|:)(refs\/heads\/)?(main|master|dev)$/, noVerify: true, killByName: true, bannedRoots: [], bannedInCommand: [], sharedCheckout: false, sharedRoot: "", readLimitBytes: 0 }
 
@@ -24,6 +29,14 @@ describe("shared checkout git mutations (ported)", () => {
     expect(await sharedGitMutation(stat as any, "git -C plain commit -m x", base)).toMatch(/git commit in plain/)
     expect(await sharedGitMutation(stat as any, "git -C worktree commit -m x", base)).toBeUndefined()
     expect(await sharedGitMutation(stat as any, "git -C plain status", base)).toBeUndefined()
+  })
+  test("guard_shared_checkout off lets a subagent's plain-checkout git mutation through", async () => {
+    const input = { client: { session: { get: async () => ({ data: { parentID: "p1" } }) } } } as any
+    const run = (hooks: any) => hooks["tool.execute.before"]({ tool: "bash", sessionID: "s1", callID: "c1" }, { args: { command: "git -C plain commit -m x" } })
+    const off = await fence(input, { guard_shared_checkout: false }, {})
+    await expect(run(off)).resolves.toBeUndefined()
+    const on = await fence(input, { guard_shared_checkout: true }, {})
+    await expect(run(on)).rejects.toThrow(/shared checkout/)
   })
 })
 

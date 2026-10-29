@@ -48,6 +48,7 @@ export function pushProblem(command: string, cfg: FenceConfig): string | undefin
 // stat(p) resolves { isDirectory } | undefined for p; injected so tests need no disk.
 export type Stat = (p: string) => Promise<{ isDirectory: boolean } | undefined>
 
+// Relative paths resolve against the opencode process working directory, so detection is exact only for project-local paths.
 async function isSharedCheckout(stat: Stat, path: unknown, cfg: FenceConfig): Promise<boolean> {
   const n = norm(path)
   if (cfg.sharedRoot && !n.startsWith(`${cfg.sharedRoot}/`)) return false
@@ -118,8 +119,10 @@ export async function fence(input: PluginInput, options: Record<string, unknown>
           if (cfg.sharedCheckout && (i.tool === "edit" || i.tool === "write") && await isSharedCheckout(stat, path, cfg)) {
             deny(`${String(path)} is in a shared checkout. Edit only inside your own worktree; never the main checkout.`)
           }
-          const mutation = command ? await sharedGitMutation(stat, command, cfg) : undefined
-          if (mutation) deny(`${mutation} changes a shared checkout. Run git only inside your own worktree.`)
+          if (cfg.sharedCheckout) {
+            const mutation = command ? await sharedGitMutation(stat, command, cfg) : undefined
+            if (mutation) deny(`${mutation} changes a shared checkout. Run git only inside your own worktree.`)
+          }
           if (cfg.readLimitBytes > 0 && i.tool === "read" && args.limit === undefined && !NOT_TEXT.test(String(path ?? ""))) {
             const size = await statNode(String(path)).then(s => (s?.isFile() ? s.size : 0)).catch(() => 0)
             if (size > cfg.readLimitBytes) {
