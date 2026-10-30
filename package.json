@@ -1,5 +1,5 @@
 {
-  "name": "opencode-darling-data",
+  "name": "@intility/opencode-darling-data",
   "version": "0.1.0",
   "description": "Darling Data plugins for opencode: subagent fence, wall, open asks, fleet, usage budget, session resume, and the SQL Server query-plan skill",
   "license": "MIT",
@@ -7,6 +7,9 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Henrik-infr/opencode-plugins.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
   },
   "type": "module",
   "main": "plugin.ts",
